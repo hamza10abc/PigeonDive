@@ -15,4 +15,6 @@ export const EMAIL_PROVIDER = Symbol("EMAIL_PROVIDER");
 /** The only thing the rest of the app knows about sending — Resend today, anything later. */
 export interface EmailProvider {
   send(input: SendEmailInput): Promise<SendEmailResult>;
+  /** Many separate emails in one request; results line up with the inputs. Nobody sees the other recipients. */
+  sendBatch(inputs: SendEmailInput[]): Promise<SendEmailResult[]>;
 }

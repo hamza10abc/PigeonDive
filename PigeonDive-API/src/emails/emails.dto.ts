@@ -1,10 +1,16 @@
-import { IsEmail, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from "class-validator";
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsEmail, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from "class-validator";
 import { Type } from "class-transformer";
 
+export const MAX_RECIPIENTS = 100;
+
 export class SendEmailDto {
-  @IsEmail()
-  @MaxLength(254)
-  to!: string;
+  /** One address or many. Every recipient gets a separate email, so none can see the others. */
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(MAX_RECIPIENTS)
+  @IsEmail({}, { each: true })
+  @MaxLength(254, { each: true })
+  to!: string[];
 
   @IsUUID()
   templateId!: string;

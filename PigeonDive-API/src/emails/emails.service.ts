@@ -43,17 +43,17 @@ export class EmailsService {
     if (!template) throw new NotFoundException("Template not found");
 
     const fromEmail = buildFromAddress(localPart, domain);
-    const email = await this.prisma.email.create({
-      data: {
-        userId,
-        templateId: template.id,
-        toEmail: input.to.trim().toLowerCase(),
-        fromEmail,
-        subject: input.subject,
-        format: template.format,
-        body: template.body,
-      },
-    });
+    const recipients = [...new Set(input.to.map((address) => address.trim().toLowerCase()).filter(Boolean))];
+    if (recipients.length === 0) throw new BadRequestException("Add at least one email address");
+
+    // One row, and one separate email, per recipient: nobody can see who else received it.
+    const emails = await Promise.all(
+      recipients.map((toEmail) =>
+        this.prisma.email.create({
+          data: { userId, templateId: template.id, toEmail, fromEmail, subject: input.subject, format: template.format, body: template.body },
+        }),
+      ),
+    );
 
     await this.prisma.senderIdentity.upsert({
       where: { localPart },
@@ -61,7 +61,7 @@ export class EmailsService {
       update: { useCount: { increment: 1 }, lastUsedAt: new Date() },
     });
 
-    const result = await this.provider.send({
+    const toInput = (email: (typeof emails)[number]) => ({
       from: fromEmail,
       to: email.toEmail,
       subject: email.subject,
@@ -69,14 +69,17 @@ export class EmailsService {
       body: email.body,
       idempotencyKey: email.id,
     });
+    const results =
+      emails.length === 1 ? [await this.provider.send(toInput(emails[0]))] : await this.provider.sendBatch(emails.map(toInput));
 
-    if (!result.ok) {
-      return this.prisma.email.update({ where: { id: email.id }, data: { status: "FAILED", error: result.error } });
-    }
-    return this.prisma.email.update({
-      where: { id: email.id },
-      data: { status: "SENT", resendId: result.providerId, sentAt: new Date() },
-    });
+    return Promise.all(
+      emails.map((email, index) => {
+        const result = results[index];
+        return result.ok
+          ? this.prisma.email.update({ where: { id: email.id }, data: { status: "SENT", resendId: result.providerId, sentAt: new Date() } })
+          : this.prisma.email.update({ where: { id: email.id }, data: { status: "FAILED", error: result.error } });
+      }),
+    );
   }
 
   async list(query: ListEmailsQuery) {

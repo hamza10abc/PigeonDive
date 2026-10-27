@@ -18,7 +18,10 @@ function setup(
     },
     senderIdentity: { upsert: vi.fn().mockResolvedValue({}) },
   };
-  const provider: EmailProvider = { send: vi.fn().mockResolvedValue(providerResult) };
+  const provider: EmailProvider = {
+    send: vi.fn().mockResolvedValue(providerResult),
+    sendBatch: vi.fn().mockImplementation((inputs: unknown[]) => Promise.resolve(inputs.map(() => providerResult))),
+  };
   const settings = { get: vi.fn().mockResolvedValue(domain) };
   const service = new EmailsService(
     prisma as unknown as PrismaService,
@@ -28,12 +31,12 @@ function setup(
   return { service, prisma, provider };
 }
 
-const input = { to: "To@Example.com", templateId: "tpl-1", subject: "Hi", fromLocalPart: "Hello" };
+const input = { to: ["To@Example.com"], templateId: "tpl-1", subject: "Hi", fromLocalPart: "Hello" };
 
 describe("EmailsService.send", () => {
   it("sends HTML templates as html and records the provider id", async () => {
     const { service, provider, prisma } = setup("HTML", { ok: true, providerId: "re_123" });
-    const email = await service.send("user-1", input);
+    const [email] = await service.send("user-1", input);
 
     expect(provider.send).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -57,9 +60,20 @@ describe("EmailsService.send", () => {
 
   it("marks the email FAILED with the provider's reason", async () => {
     const { service } = setup("HTML", { ok: false, error: "domain not verified" });
-    const email = await service.send("user-1", input);
+    const [email] = await service.send("user-1", input);
     expect(email.status).toBe("FAILED");
     expect(email.error).toBe("domain not verified");
+  });
+
+  it("sends each recipient a separate email, so none can see the others", async () => {
+    const { service, provider, prisma } = setup("HTML", { ok: true, providerId: "re_9" });
+    const emails = await service.send("user-1", { ...input, to: ["a@x.com", "B@x.com", "a@x.com"] });
+
+    expect(prisma.email.create).toHaveBeenCalledTimes(2);
+    expect(provider.send).not.toHaveBeenCalled();
+    const batch = (provider.sendBatch as ReturnType<typeof vi.fn>).mock.calls[0][0] as { to: string }[];
+    expect(batch.map((e) => e.to)).toEqual(["a@x.com", "b@x.com"]);
+    expect(emails).toHaveLength(2);
   });
 
   it("rejects a sender name that is not a plain local part, without sending", async () => {
