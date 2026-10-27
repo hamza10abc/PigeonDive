@@ -1,0 +1,6 @@
+# Development only: exposes Postgres on localhost:5434 so you can run the API/web outside Docker
+# or create migrations.   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5434:5432"

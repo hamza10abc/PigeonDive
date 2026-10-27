@@ -1,0 +1,110 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TemplateFormat {
+  HTML
+  TEXT
+}
+
+enum EmailStatus {
+  QUEUED
+  SENT
+  DELAYED
+  DELIVERED
+  BOUNCED
+  COMPLAINED
+  FAILED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  username     String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  emails       Email[]
+}
+
+model Template {
+  id        String         @id @default(uuid())
+  name      String
+  subject   String
+  format    TemplateFormat @default(HTML)
+  /// HTML source or plain text, depending on `format`.
+  body      String         @db.Text
+  /// Reserved for template variables (phase 2).
+  variables Json?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  emails    Email[]
+
+  @@index([updatedAt])
+}
+
+/// The part before the @ that has been used as a sender, for the "previously used" picker.
+model SenderIdentity {
+  id         String   @id @default(uuid())
+  localPart  String   @unique
+  useCount   Int      @default(0)
+  lastUsedAt DateTime @default(now())
+}
+
+model Email {
+  id        String      @id @default(uuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Nulled when the template is deleted; the snapshot below keeps the history readable.
+  templateId String?
+  template  Template?   @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  toEmail   String
+  fromEmail String
+  subject   String
+  /// Snapshot of what was actually sent, so later template edits never rewrite history.
+  format    TemplateFormat
+  body      String      @db.Text
+  variables Json?
+  status    EmailStatus @default(QUEUED)
+  resendId  String?     @unique
+  error     String?     @db.Text
+  sentAt    DateTime?
+  deliveredAt DateTime?
+  openCount Int         @default(0)
+  firstOpenedAt DateTime?
+  clickCount Int        @default(0)
+  firstClickedAt DateTime?
+  createdAt DateTime    @default(now())
+  events    EmailEvent[]
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([userId, createdAt])
+}
+
+model EmailEvent {
+  id              String   @id @default(uuid())
+  emailId         String
+  email           Email    @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  type            String
+  occurredAt      DateTime
+  metadata        Json?
+  /// The provider's own event id (svix-id) — unique so a redelivered webhook is a no-op.
+  providerEventId String   @unique
+  createdAt       DateTime @default(now())
+
+  @@index([emailId, occurredAt])
+}
+
+/// App-level configuration edited from the Settings page (Resend key, sending domain, webhook
+/// secret…) plus a few values the app generates itself (the JWT signing secret). Kept in the
+/// database rather than environment variables so setup is "run the container, then click".
+model Setting {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+}

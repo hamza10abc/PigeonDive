@@ -1,0 +1,57 @@
+# PigeonDive: one command to run everything.
+#   cp .env.example .env     (set SEED_USERNAME and SEED_PASSWORD)
+#   docker compose up -d --build
+# Everything else (Resend key, sending domain, webhook) is set in the app's Settings page.
+
+x-db-url: &db-url postgresql://pigeon:pigeon@postgres:5432/pigeondive?schema=public
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pigeon
+      POSTGRES_PASSWORD: pigeon
+      POSTGRES_DB: pigeondive
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pigeon -d pigeondive"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    build: ./PigeonDive-API
+    command: ["sh", "-c", "pnpm prisma:deploy && pnpm prisma:seed"]
+    environment:
+      DATABASE_URL: *db-url
+      SEED_USERNAME: ${SEED_USERNAME:?Set SEED_USERNAME in .env}
+      SEED_PASSWORD: ${SEED_PASSWORD:?Set SEED_PASSWORD in .env}
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  api:
+    build: ./PigeonDive-API
+    environment:
+      DATABASE_URL: *db-url
+      API_PORT: "3000"
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  # Serves the web app and forwards /api to the API, so the browser only ever talks to one
+  # origin. That is why no CORS is configured anywhere.
+  web:
+    build: ./PigeonDive-Web
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

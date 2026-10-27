@@ -1,0 +1,109 @@
+@import "@fontsource-variable/hanken-grotesk/wght.css";
+@import "@fontsource-variable/newsreader/opsz.css";
+@import "@fontsource-variable/newsreader/opsz-italic.css";
+@import "@fontsource-variable/jetbrains-mono/wght.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  @apply bg-paper font-sans text-ink antialiased;
+  font-size: 15px;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: #0f5c4a;
+  color: #fff;
+}
+
+/* 16px minimum on touch screens stops iOS Safari zooming the page when a field is focused. */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+@media (min-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 15px;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid #111418;
+  outline-offset: 2px;
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* The one gradient in the product: a pigeon's neck sheen (green into gold). */
+.bg-sheen {
+  background-image: linear-gradient(90deg, #12a37f 0%, #7fb84a 55%, #e0b13c 100%);
+}
+
+/* A postal perforation: used as a divider instead of a plain rule. */
+.perforation {
+  height: 1px;
+  background-image: linear-gradient(to right, #c4c9c3 50%, transparent 50%);
+  background-size: 8px 1px;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #e4e7e3 0%, #f1f3f0 50%, #e4e7e3 100%);
+  background-size: 400px 100%;
+  animation: shimmer 1.4s linear infinite;
+  border-radius: 8px;
+}
+
+/* Hide the native scrollbar on the horizontal template picker while keeping it scrollable. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* CodeMirror, dressed to match the rest of the app. */
+.cm-editor {
+  font-family: "JetBrains Mono Variable", ui-monospace, monospace;
+  font-size: 13px;
+  background: #fff;
+}
+.cm-editor.cm-focused {
+  outline: none;
+}
+.cm-gutters {
+  background: #f6f7f5 !important;
+  border-right: 1px solid #d9ddd8 !important;
+  color: #848b87 !important;
+}
+.cm-activeLine,
+.cm-activeLineGutter {
+  background: #f6f7f5 !important;
+}
+.cm-scroller {
+  line-height: 1.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
